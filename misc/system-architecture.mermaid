@@ -1,0 +1,69 @@
+flowchart TB
+    %% Client Connections
+    subgraph Client["Client Connections"]
+        C1["Client 1"]
+        C2["Client ..."]
+        C3["Client N"]
+    end
+
+    %% Single-threaded Server
+    subgraph Server["Single-threaded Server"]
+        subgraph CE1["Connection Engine"]
+            IM["I/O Multiplexer"]
+            EL["Event Loop"]
+        end
+        
+        subgraph P["Protocol Handler"]
+            RESP["RESP Parser/Encoder"]
+        end
+        
+        subgraph CE2["Command Engine"]
+            CMD["Command Router"]
+            VAL["Input Validator"]
+        end
+        
+        subgraph S["Storage Engine"]
+            MM["Memory Manager"]
+            DT["Data Types"]
+            EV["Eviction Manager"]
+            
+            subgraph AT["Available Types"]
+                STR["Strings"]
+                LST["Lists"]
+            end
+        end
+    end
+    
+    %% Connections and Flows
+    C1 & C2 & C3 <--> IM
+    IM <--> EL
+    EL <--> RESP
+    RESP <--> CMD
+    CMD <--> VAL
+    VAL <--> MM
+    MM <--> DT
+    DT <--> STR & LST
+    MM <--> EV
+
+    %% Styling for uniform width and structured appearance
+    classDef container fill:#aaaaaa,stroke:#000,stroke-width:2px,color:#000;
+    classDef component1 fill:#777777,stroke:#000,stroke-width:1px,color:#000;
+    classDef component2 fill:#55555a,stroke:#000,stroke-width:1px,color:#000;
+    classDef component3 fill:#44444a,stroke:#000,stroke-width:1px,color:#000;
+
+    %% Apply black text color to specific nodes
+    class Server,Client container;
+    class CE1,P,CE2,S component1;
+    class C1,C2,C3,IM,EL,RESP,CMD,VAL,MM,DT,EV,AT component2;
+    class STR,LST component3;
+
+    %% Link style to force lines to be black, including arrows
+    linkStyle default stroke:#000,stroke-width:2px;
+
+%%{
+  init: {
+    'themeVariables': {
+      'lineColor': '#000'
+    }
+  }
+}%%
