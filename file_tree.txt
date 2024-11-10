@@ -1,0 +1,39 @@
+./
+├── Cargo.lock
+├── Cargo.toml
+├── file_tree.txt
+├── LICENSE
+├── misc/
+│   ├── system-architecture.mermaid
+│   └── system-architecture.svg
+├── README.md
+├── REAMDME.no-commit.md
+└── src/
+    ├── config/
+    │   ├── mod.rs
+    │   └── settings.rs
+    ├── engine/
+    │   ├── executor.rs
+    │   ├── mod.rs
+    │   └── router.rs
+    ├── main.rs
+    ├── mod.rs
+    ├── network/
+    │   ├── event_loop.rs
+    │   ├── io_multiplexer.rs
+    │   ├── mod.rs
+    │   └── server.rs
+    ├── protocol/
+    │   ├── handler.rs
+    │   ├── mod.rs
+    │   └── resp/
+    ├── storage/
+    │   ├── data_types/
+    │   ├── eviction/
+    │   ├── memory.rs
+    │   └── mod.rs
+    └── utils/
+        ├── error.rs
+        ├── mod.rs
+        ├── result.rs
+        └── stats.rs

@@ -1,108 +1,66 @@
-# Rudist
-A Redis Clone Implemented in Rust
+# Rudist 🦀⚡
 
-## Overview
-**Rudist** is a high-performance, in-memory key-value store that mimics the functionality of Redis, written in Rust. It provides core Redis features like a command engine, memory management, and support for multiple data types, all built with a focus on performance and scalability.
+A Redis clone written in Rust for learning purposes. Implements core Redis functionality with a focus on performance and simplicity.
 
-## System Architecture
+## Why Build This?
+- Learn network programming and TCP protocols
+- Implement fundamental data structures & algorithms 
+- Understand memory management through Rust's ownership model
+- Practice concurrent programming with multiple client connections
 
-![System Graph](./misc/system-architecture.svg)
+## Features
 
-*The system architecture diagram above illustrates the components and their interactions within Rudist.*
+- ⚡ Single-threaded architecture with event loop
+- 🔌 TCP connection support with multiple clients
+- 📦 Core data types (Strings, Lists)
+- 🔍 RESP (Redis Serialization Protocol) parser
+- 🧮 Memory management and eviction
 
-## Directory Structure
+## Implementation Status
 
-The project follows a modular directory structure to promote clarity and maintainability:
+### Core Components
+- [x] TCP Server
+- [x] Client Connection Management
+- [ ] RESP Protocol Support (WIP)
+- [ ] Memory Limits & Eviction
 
-    .
-    ├── Cargo.toml
-    ├── src/
-    │   ├── main.rs                # entry point, server initialization
-    │   ├── config/
-    │   │   ├── mod.rs             # config module
-    │   │   └── settings.rs        # xxx
-    │   │
-    │   ├── network/
-    │   │   ├── mod.rs             # network module
-    │   │   ├── event_loop.rs      # xxx
-    │   │   ├── io_multiplexer.rs  # xxx
-    │   │   └── server.rs          # xxx
-    │   │
+### Supported Commands
 
-
-## [GOAL] Supported Features
-
-### Data Types
-- **Strings**
-  - GET, SET operations
-  - INCR, DECR operations
-  - String operations (APPEND, STRLEN)
-  - TTL support
-
-- **Lists**
-  - LPUSH, RPUSH operations
-  - LPOP, RPOP operations
-  - LRANGE operation
-  - List length operations
-
-### Core Features
-- Single-threaded architecture with event loop
-- RESP (Redis Serialization Protocol) support
-- Basic key eviction (LRU,LFU policy)
-- Memory limits enforcement
-- Command pipelining
-
-### Connections
-- TCP connections
-- Multiple client support
-- Basic client connection management
-
-### Commands
 #### Key Operations
-- DEL
-- EXISTS
-- EXPIRE
-- TTL
+- [x] DEL
+- [x] EXISTS
+- [ ] EXPIRE
+- [x] TTL
 
-#### String Commands
-- SET [key] [value]
-- GET [key]
-- INCR [key]
-- DECR [key]
-- APPEND [key] [value]
-- STRLEN [key]
+#### String Operations
+- [x] SET
+- [x] GET
+- [ ] INCR/DECR
+- [ ] APPEND
 
-#### List Commands
-- LPUSH [key] [value]
-- RPUSH [key] [value]
-- LPOP [key]
-- RPOP [key]
-- LLEN [key]
-- LRANGE [key] [start] [stop]
+#### List Operations
+- [ ] LPUSH/RPUSH
+- [ ] LPOP/RPOP
+- [ ] LLEN
+- [ ] LRANGE
 
-#### Server Commands
-- PING
-- INFO
-- COMMAND
-- QUIT
+## Project Structure
 
-### Memory Management
-- Basic memory usage tracking
-- Maximum memory limit
-- LRU eviction when memory limit is reached
+```
+src/
+├── config/      # Server configuration
+├── engine/      # Command processing
+├── network/     # TCP & event handling
+├── protocol/    # RESP implementation
+├── storage/     # Data structures
+└── utils/       # Helpers & error handling
+```
 
-### Error Handling
-- Standard Redis error responses
-- Connection error handling
-- Command syntax validation
-
----
-⚠️ **Note**: This is a simplified implementation for learning purposes. For production use, please refer to the official Redis server.
+## Architecture
+![System Graph](./misc/system-architecture.svg)
+*The diagram above illustrates the components and their interactions within Rudist.*
 
 ## Getting Started
+[Coming Soon]
 
-To get started with Rudist, follow these steps:
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/c3llus/rudist.git
+⚠️ **Note**: This is a learning project. For production use, please use the official Redis server.

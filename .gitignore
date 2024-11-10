@@ -24,4 +24,8 @@ Cargo.lock
 
 /target
 
+# Ignore files with explicit "no-commit" in their name
 *no-commit*
+
+# Ignore Visual Studio Code settings folder
+.vscode/
