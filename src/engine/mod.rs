@@ -23,4 +23,12 @@ impl Engine {
         let cmd = self.router.route(&command).map_err(|e| e.to_string())?;
         self.executor.execute(cmd).map_err(|e| e.to_string())
     }
+
+    pub fn active_expire_cycle_fast(&mut self) {
+        self.executor.active_expire_cycle_fast();
+    }
+
+    pub fn active_expire_cycle_slow(&mut self) {
+        self.executor.active_expire_cycle_slow();
+    }
 }

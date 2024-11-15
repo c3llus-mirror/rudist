@@ -16,7 +16,10 @@ impl Server {
         let engine = Engine::new();
         let handler = Handler::new(engine);
         let io_multiplexer = IOMultiplexer::new(handler);
-        let event_loop = EventLoop::new(&address, io_multiplexer)?;
+        let small_sleep_duration = std::time::Duration::from_millis(1);
+        let active_expiry_fast_duration = std::time::Duration::from_millis(10);
+        let active_expiry_slow_duration = std::time::Duration::from_millis(200);
+        let event_loop = EventLoop::new(&address, io_multiplexer,small_sleep_duration,active_expiry_fast_duration,active_expiry_slow_duration)?;
         Ok(Server { address, event_loop })
     }
 

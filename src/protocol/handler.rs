@@ -27,4 +27,12 @@ impl Handler {
             Err(e) => RESPType::Error(e)
         }
     }
+
+    pub fn active_expire_cycle_fast(&mut self){
+        self.engine.active_expire_cycle_fast();
+    }
+
+    pub fn active_expire_cycle_slow(&mut self){
+        self.engine.active_expire_cycle_slow();
+    }
 }

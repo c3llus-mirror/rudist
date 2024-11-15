@@ -1,6 +1,7 @@
 // src/engine/executor.rs
 use crate::storage::{memory::MemoryStorage, Storage, StorageValue, Command};
 use crate::utils::error::Result;
+use crate::storage::memory::ExpireCycleType;
 
 pub struct Executor {
     storage: MemoryStorage,
@@ -43,6 +44,14 @@ impl Executor {
                 Ok("OK".to_string())
             }
         }
+    }
+
+    pub fn active_expire_cycle_fast(&mut self) {
+        self.storage.active_expire_cycle(ExpireCycleType::Fast);
+    }
+
+    pub fn active_expire_cycle_slow(&mut self) {
+        self.storage.active_expire_cycle(ExpireCycleType::Slow);
     }
 }
 

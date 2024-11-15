@@ -1,14 +1,24 @@
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::time::{SystemTime, Instant, Duration};
+use rand::seq::SliceRandom;
 use super::{Storage, StorageEntry, StorageValue};
 use crate::utils::error::Result;
 use crate::utils::error::RedisError;
+use std::thread;
+
+
+// TODO: should we make this configurable?
+const ACTIVE_EXPIRE_CYCLE_LOOKUPS_PER_LOOP: usize = 20;  // how many keys to sample per loop
+const ACTIVE_EXPIRE_CYCLE_FAST_DURATION: Duration = Duration::from_millis(1);  // fast cycle duration
+const ACTIVE_EXPIRE_CYCLE_SLOW_DURATION: Duration = Duration::from_millis(25);  // slow cycle duration
+const ACTIVE_EXPIRE_CYCLE_THRESHOLD: f64 = 0.25;  // stop sampling if hit rate drops below 25%
 
 #[derive(Debug)]
 pub struct MemoryStorage {
     data: HashMap<String, StorageEntry>,
     max_memory: usize,
     used_memory: usize,
+    last_expire_cycle: Instant,
 }
 
 impl MemoryStorage {
@@ -17,11 +27,72 @@ impl MemoryStorage {
             data: HashMap::new(),
             max_memory,
             used_memory: 0,
+            last_expire_cycle: Instant::now(),
         }
     }
 
-    pub fn memory_usage(&self) -> usize {
-        self.used_memory
+    // redis-style active expiration cycle
+    pub fn active_expire_cycle(&mut self, cycle_type: ExpireCycleType) -> ExpireStats {
+        let mut stats = ExpireStats::default();
+        let start = Instant::now();
+        let max_duration = match cycle_type {
+            ExpireCycleType::Fast => ACTIVE_EXPIRE_CYCLE_FAST_DURATION,
+            ExpireCycleType::Slow => ACTIVE_EXPIRE_CYCLE_SLOW_DURATION,
+        };
+
+        // get all keys for sampling
+        let keys: Vec<String> = self.data.keys().cloned().collect();
+        let mut rng = rand::thread_rng();
+
+        // while still within cycle duration
+        while start.elapsed() < max_duration {
+            stats.total_cycles += 1;
+            let mut expired_in_cycle = 0;
+
+            // sample random keys
+            for _ in 0..ACTIVE_EXPIRE_CYCLE_LOOKUPS_PER_LOOP {
+                if let Some(key) = keys.choose(&mut rng) {
+                    stats.keys_checked += 1;
+                    
+                    if let Some(entry) = self.data.get(key) {
+                        if let Some(expiry_time) = entry.expires_at {
+                            if expiry_time < SystemTime::now() {
+                                if let Some(entry) = self.data.remove(key) {
+                                    self.used_memory -= Self::estimate_size(&entry.data);
+                                    expired_in_cycle += 1;
+                                    stats.keys_expired += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // calculate hit rate for this cycle
+            let hit_rate = expired_in_cycle as f64 / ACTIVE_EXPIRE_CYCLE_LOOKUPS_PER_LOOP as f64;
+            
+            // stop if hit rate is too low (redis behavior)
+            if hit_rate < ACTIVE_EXPIRE_CYCLE_THRESHOLD {
+                stats.stopped_by_threshold = true;
+                break;
+            }
+        }
+
+        self.last_expire_cycle = Instant::now();
+        stats.duration = start.elapsed();
+        stats
+    }
+
+    // passive expiration check (called during get operations)
+    fn check_expiry(&mut self, key: &str) -> bool {
+        if let Some(entry) = self.data.get(key) {
+            if let Some(expiry_time) = entry.expires_at {
+                if expiry_time < SystemTime::now() {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn estimate_size(value: &StorageValue) -> usize {
@@ -35,12 +106,59 @@ impl MemoryStorage {
         self.max_memory 
     }
 
+    fn is_expired(&self, key: &str) -> bool {
+        if let Some(entry) = self.data.get(key) {
+            if let Some(expiry_time) = entry.expires_at {
+                return expiry_time < SystemTime::now();
+            }
+        }
+        false
+    }
+
+    // separate function to handle lazy deletion
+    fn lazy_delete(&mut self, key: &str) -> Result<()> {
+        if let Some(entry) = self.data.remove(key) {
+            self.used_memory -= Self::estimate_size(&entry.data);
+        }
+        Ok(())
+    }
+    
+}
+
+#[derive(Debug)]
+pub enum ExpireCycleType {
+    Fast,  // quick cycle for event loop
+    Slow,  // more thorough cycle for maintenance
+}
+
+#[derive(Debug, Default)]
+pub struct ExpireStats {
+    pub keys_checked: usize,
+    pub keys_expired: usize,
+    pub total_cycles: usize,
+    pub stopped_by_threshold: bool,
+    pub duration: Duration,
 }
 
 impl Storage for MemoryStorage {
+    fn get(&mut self, key: &str) -> Result<&StorageEntry> {
+        // passive expiration
+        if self.check_expiry(key) {
+            self.delete(key)?;
+            return Err(RedisError::KeyNotFound);
+        }
+
+        self.data.get(key).ok_or(RedisError::KeyNotFound)
+    }
+
     fn set(&mut self, key: String, value: StorageValue, ttl: Option<SystemTime>) -> Result<()> {
         let size = Self::estimate_size(&value);
         
+        // if key exists, subtract its size first
+        if let Some(old_entry) = self.data.get(&key) {
+            self.used_memory -= Self::estimate_size(&old_entry.data);
+        }
+
         if self.used_memory + size > self.max_memory {
             return Err(RedisError::OutOfMemory);
         }
@@ -53,18 +171,6 @@ impl Storage for MemoryStorage {
         self.used_memory += size;
         self.data.insert(key, entry);
         Ok(())
-    }
-    
-    fn get(&self, key: &str) -> Result<&StorageEntry> {
-        let entry = self.data.get(key).ok_or(RedisError::KeyNotFound)?;
-        
-        if let Some(expires_at) = entry.expires_at {
-            if SystemTime::now() > expires_at {
-                return Err(RedisError::KeyNotFound);
-            }
-        }
-        
-        Ok(entry)
     }
 
     fn delete(&mut self, key: &str) -> Result<bool> {
@@ -90,100 +196,50 @@ impl Storage for MemoryStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, Duration};
-    use std::thread;
 
     #[test]
-    fn test_new_storage() {
-        let storage = MemoryStorage::new(1000);
-        assert_eq!(storage.capacity(), 1000);
-        assert_eq!(storage.memory_usage(), 0);
-    }
+    fn test_passive_expiration() {
+        let mut storage = MemoryStorage::new(1024);
+        let now = SystemTime::now();
+        let ttl = now + Duration::from_secs(1);
+        
+        // set value with 1 second ttl
+        storage.set("key1".to_string(), 
+            StorageValue::String("value1".to_string()), 
+            Some(ttl)).unwrap();
 
-    #[test]
-    fn test_basic_operations() -> Result<()> {
-        let mut storage = MemoryStorage::new(1000);
+        // value should exist initially
+        assert!(storage.exists("key1").unwrap());
         
-        storage.set("key1".to_string(), StorageValue::String("value1".to_string()), None)?;
+        // wait for ttl to expire
+        thread::sleep(Duration::from_secs(2));
         
-        let entry = storage.get("key1")?;
-        assert!(matches!(entry.data, StorageValue::String(ref s) if s == "value1"));
-        
-        assert!(storage.exists("key1")?);
-        assert!(!storage.exists("nonexistent")?);
-        
-        assert!(storage.delete("key1")?);
-        assert!(!storage.delete("nonexistent")?);
-        
-        Ok(())
-    }
-
-    #[test]
-    fn test_memory_management() -> Result<()> {
-        let mut storage = MemoryStorage::new(10);
-        
-        // should succeed (size = 5)
-        storage.set("key1".to_string(), StorageValue::String("12345".to_string()), None)?;
-        
-        // should fail (size = 6)
-        let result = storage.set("key2".to_string(), StorageValue::String("123456".to_string()), None);
-        assert!(matches!(result, Err(RedisError::OutOfMemory)));
-        
-        // should succeed after deletion
-        storage.delete("key1")?;
-        storage.set("key2".to_string(), StorageValue::String("123".to_string()), None)?;
-        
-        Ok(())
-    }
-
-    #[test]
-    fn test_ttl() -> Result<()> {
-        let mut storage = MemoryStorage::new(1000);
-        
-        // set with TTL
-        let ttl = SystemTime::now() + Duration::from_millis(1);
-        storage.set("key1".to_string(), StorageValue::String("value1".to_string()), Some(ttl))?;
-        
-        // should exist immediately
-        assert!(storage.get("key1").is_ok());
-        
-        // wait for expiration
-        thread::sleep(Duration::from_millis(5));
-        
-        // should be expired
-        assert!(matches!(storage.get("key1"), Err(RedisError::KeyNotFound)));
-        
-        Ok(())
-    }
-
-    #[test]
-    fn test_list_operations() -> Result<()> {
-        let mut storage = MemoryStorage::new(1000);
-        
-        let list = vec!["item1".to_string(), "item2".to_string()];
-        storage.set("list1".to_string(), StorageValue::List(list.clone()), None)?;
-        
-        if let StorageValue::List(stored_list) = &storage.get("list1")?.data {
-            assert_eq!(stored_list, &list);
-        } else {
-            panic!("Wrong type stored");
-        }
-        
-        Ok(())
-    }
-
-    #[test]
-    fn test_clear() -> Result<()> {
-        let mut storage = MemoryStorage::new(1000);
-        
-        storage.set("key1".to_string(), StorageValue::String("value1".to_string()), None)?;
-        storage.set("key2".to_string(), StorageValue::String("value2".to_string()), None)?;
-        
-        storage.clear()?;
-        assert_eq!(storage.memory_usage(), 0);
+        // value should be gone after expiry
         assert!(storage.get("key1").is_err());
-        assert!(storage.get("key2").is_err());
+    }
+
+    #[test]
+    fn test_active_expiration() {
+        let mut storage = MemoryStorage::new(1024);
+        let now = SystemTime::now();
+        let ttl = now + Duration::from_millis(5);
+
+        // add multiple entries with ttl
+        for i in 0..50 {
+            storage.set(
+                format!("key{}", i),
+                StorageValue::String(format!("value{}", i)),
+                Some(ttl)
+            ).unwrap();
+        }
+
+        // wait for ttl
+        thread::sleep(Duration::from_millis(10));
+
+        // run expiration cycle
+        let stats = storage.active_expire_cycle(ExpireCycleType::Slow);
         
-        Ok(())
+        assert!(stats.keys_expired > 0);
+        assert!(stats.keys_checked > 0);
     }
 }

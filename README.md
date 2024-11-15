@@ -21,7 +21,7 @@ A Redis clone written in Rust for learning purposes. Implements core Redis funct
 ### Core Components
 - [x] TCP Server
 - [x] Client Connection Management
-- [ ] RESP Protocol Support (WIP)
+- [x] RESP Protocol Support (partial)
 - [ ] Memory Limits & Eviction
 
 ### Supported Commands
@@ -52,7 +52,7 @@ src/
 ├── engine/      # Command processing
 ├── network/     # TCP & event handling
 ├── protocol/    # RESP implementation
-├── storage/     # Data structures
+├── storage/     # Core Storage Engine
 └── utils/       # Helpers & error handling
 ```
 
@@ -63,4 +63,4 @@ src/
 ## Getting Started
 [Coming Soon]
 
-⚠️ **Note**: This is a learning project. For production use, please use the official Redis server.
+⚠️ **Note**: FOR NOW, this is a learning project. For production use, please use the official Redis server.

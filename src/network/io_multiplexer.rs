@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::protocol::handler::Handler;
 use crate::protocol::resp::types::RESPType;
 use crate::protocol::resp::parser::parse_resp;
+use crate::storage::memory::ExpireCycleType;
 
 pub struct IOMultiplexer {
     connections: Arc<Mutex<Vec<TcpStream>>>,
@@ -56,5 +57,15 @@ impl IOMultiplexer {
             connections.push(stream);
         }
         Ok(())
+    }
+
+    pub fn active_expire_cycle_fast(&self){
+        let mut handler = self.handler.lock().unwrap();
+        handler.active_expire_cycle_fast();
+    }
+
+    pub fn active_expire_cycle_slow(&self){
+        let mut handler = self.handler.lock().unwrap();
+        handler.active_expire_cycle_slow();
     }
 }

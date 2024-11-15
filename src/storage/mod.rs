@@ -1,18 +1,20 @@
 use crate::utils::error::{Result, RedisError};
 use std::time::SystemTime;
 use std::fmt;
+use crate::storage::data_types::string::RedisString;
 
 pub mod memory;
 pub mod data_types;
 pub mod eviction;
+pub mod expiration;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct StorageEntry {
     pub data: StorageValue,
     pub expires_at: Option<SystemTime>,
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum StorageValue {
     String(String),
     List(Vec<String>),
@@ -21,11 +23,12 @@ pub enum StorageValue {
 
 pub trait Storage {
     fn set(&mut self, key: String, value: StorageValue, ttl: Option<SystemTime>) -> Result<()>;
-    fn get(&self, key: &str) -> Result<&StorageEntry>;
+    fn get(&mut self, key: &str) -> Result<&StorageEntry>;
     fn delete(&mut self, key: &str) -> Result<bool>;
     fn exists(&self, key: &str) -> Result<bool>;
     fn clear(&mut self) -> Result<()>;
 }
+
 #[derive(Debug)]
 pub enum Command {
     Get(String),
