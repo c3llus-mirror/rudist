@@ -39,9 +39,25 @@ impl Executor {
                 let exists = self.storage.exists(&key)?;
                 Ok(exists.to_string())
             },
-            Command::Clear => {
+            Command::FlushDB => {
                 self.storage.clear()?;
                 Ok("OK".to_string())
+            },
+            Command::Expire(key, ttl) => {
+                self.storage.expire(&key, ttl)?;
+                Ok("OK".to_string())
+            },
+            Command::Incr(key) => {
+                let res = self.storage.incr(&key)?;
+                Ok(res.to_string())
+            },
+            Command::Decr(key) => {
+                let res = self.storage.decr(&key)?;
+                Ok(res.to_string())
+            },
+            Command::Append(key, value) => {
+                let res = self.storage.append(&key, &value)?;
+                Ok(res)
             }
         }
     }
@@ -145,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clear() {
+    fn test_flushdb() {
         let mut executor = Executor::new();
         executor.execute(Command::Set(
             "key1".to_string(),
@@ -153,7 +169,7 @@ mod tests {
             None
         )).unwrap();
 
-        let clear_result = executor.execute(Command::Clear);
+        let clear_result = executor.execute(Command::FlushDB);
         assert!(clear_result.is_ok());
         assert_eq!(clear_result.unwrap(), "OK");
 

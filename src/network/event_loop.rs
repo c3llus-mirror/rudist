@@ -51,6 +51,7 @@ impl EventLoop {
                 }
                 Err(e) => return Err(e),
             }
+            self.io_multiplexer.process_next_request()?;
         }
     }
 }

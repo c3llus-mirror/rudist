@@ -71,6 +71,36 @@ impl Router {
                         Ok(Command::Exists(String::from_utf8(key.to_vec())
                             .map_err(|_| "Invalid UTF-8 in key")?))
                     },
+                    "FLUSHDB" if parts.len() == 1 => Ok(Command::FlushDB),
+                    "EXPIRE" if parts.len() == 3 => {
+                        let key = parts[1].as_bytes()?;
+                        let ttl = String::from_utf8(parts[2].as_bytes()?.to_vec())
+                            .map_err(|_| "Invalid UTF-8 in TTL")?
+                            .parse::<u64>()
+                            .map_err(|_| "Invalid TTL value")?;
+                        Ok(Command::Expire(
+                            String::from_utf8(key.to_vec()).map_err(|_| "Invalid UTF-8 in key")?,
+                            ttl
+                        ))
+                    },
+                    "INCR" if parts.len() == 2 => {
+                        let key = parts[1].as_bytes()?;
+                        Ok(Command::Incr(String::from_utf8(key.to_vec())
+                            .map_err(|_| "Invalid UTF-8 in key")?))
+                    },
+                    "DECR" if parts.len() == 2 => {
+                        let key = parts[1].as_bytes()?;
+                        Ok(Command::Decr(String::from_utf8(key.to_vec())
+                            .map_err(|_| "Invalid UTF-8 in key")?))
+                    },
+                    "APPEND" if parts.len() == 3 => {
+                        let key = parts[1].as_bytes()?;
+                        let value = parts[2].as_bytes()?;
+                        Ok(Command::Append(
+                            String::from_utf8(key.to_vec()).map_err(|_| "Invalid UTF-8 in key")?,
+                            String::from_utf8(value.to_vec()).map_err(|_| "Invalid UTF-8 in value")?
+                        ))
+                    },
                     _ => Err("Unknown command or wrong number of arguments".into())
                 }
             },

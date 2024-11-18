@@ -6,7 +6,7 @@ use crate::storage::data_types::string::RedisString;
 pub mod memory;
 pub mod data_types;
 pub mod eviction;
-pub mod expiration;
+// pub mod expiration;
 
 #[derive(Debug,Clone)]
 pub struct StorageEntry {
@@ -27,6 +27,10 @@ pub trait Storage {
     fn delete(&mut self, key: &str) -> Result<bool>;
     fn exists(&self, key: &str) -> Result<bool>;
     fn clear(&mut self) -> Result<()>;
+    fn incr(&mut self, key: &str) -> Result<i64>;
+    fn decr(&mut self, key: &str) -> Result<i64>;
+    fn expire(&mut self, key: &str, ttl: u64) -> Result<()>;
+    fn append(&mut self, key: &str, value: &str) -> Result<String>;
 }
 
 #[derive(Debug)]
@@ -35,7 +39,11 @@ pub enum Command {
     Set(String, StorageValue, Option<SystemTime>),
     Del(String),
     Exists(String),
-    Clear,
+    Expire(String, u64),
+    Incr(String),
+    Decr(String),
+    Append(String, String),
+    FlushDB,
 }
 
 impl fmt::Display for Command {
@@ -45,7 +53,11 @@ impl fmt::Display for Command {
             Command::Set(key, _, _) => write!(f, "SET {}", key),
             Command::Del(key) => write!(f, "DEL {}", key),
             Command::Exists(key) => write!(f, "EXISTS {}", key),
-            Command::Clear => write!(f, "CLEAR"),
+            Command::FlushDB => write!(f, "CLEAR"),
+            Command::Expire(key, ttl) => write!(f, "EXPIRE {} {}", key, ttl),
+            Command::Incr(key) => write!(f, "INCR {}", key),
+            Command::Decr(key) => write!(f, "DECR {}", key),
+            Command::Append(key, value) => write!(f, "APPEND {} {}", key, value),
         }
     }
 }

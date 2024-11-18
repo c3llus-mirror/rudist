@@ -191,6 +191,93 @@ impl Storage for MemoryStorage {
         self.used_memory = 0;
         Ok(())
     }
+
+    fn expire(&mut self, key: &str, ttl: u64) -> Result<()> {
+        if let Some(entry) = self.data.get_mut(key) {
+            entry.expires_at = Some(SystemTime::now() + Duration::from_secs(ttl));
+            Ok(())
+        } else {
+            Err(RedisError::KeyNotFound)
+        }
+    }
+
+    fn incr(&mut self, key: &str) -> Result<i64> {
+        let value = match self.data.get_mut(key) {
+            Some(entry) => {
+                if let StorageValue::String(ref mut s) = entry.data {
+                    match s.parse::<i64>() {
+                        Ok(mut num) => {
+                            num += 1;
+                            *s = num.to_string();
+                            num
+                        }
+                        Err(_) => return Err(RedisError::NotInteger),
+                    }
+                } else {
+                    return Err(RedisError::NotInteger);
+                }
+            }
+            None => {
+                let entry = StorageEntry {
+                    data: StorageValue::String("1".to_string()),
+                    expires_at: None,
+                };
+                self.data.insert(key.to_string(), entry);
+                1
+            }
+        };
+        Ok(value)
+    }
+
+    fn decr(&mut self, key: &str) -> Result<i64> {
+        let value = match self.data.get_mut(key) {
+            Some(entry) => {
+                if let StorageValue::String(ref mut s) = entry.data {
+                    match s.parse::<i64>() {
+                        Ok(mut num) => {
+                            num -= 1;
+                            *s = num.to_string();
+                            num
+                        }
+                        Err(_) => return Err(RedisError::NotInteger),
+                    }
+                } else {
+                    return Err(RedisError::NotInteger);
+                }
+            }
+            None => {
+                let entry = StorageEntry {
+                    data: StorageValue::String("-1".to_string()),
+                    expires_at: None,
+                };
+                self.data.insert(key.to_string(), entry);
+                -1
+            }
+        };
+        Ok(value)
+    }
+
+    fn append(&mut self, key: &str, value: &str) -> Result<String> {
+        let new_value = match self.data.get_mut(key) {
+            Some(entry) => {
+                if let StorageValue::String(ref mut s) = entry.data {
+                    s.push_str(value);
+                    s.clone()
+                } else {
+                    return Err(RedisError::WrongType);
+                }
+            }
+            None => {
+                let entry = StorageEntry {
+                    data: StorageValue::String(value.to_string()),
+                    expires_at: None,
+                };
+                self.data.insert(key.to_string(), entry);
+                value.to_string()
+            }
+        };
+        Ok(new_value)
+    }
 }
 
 #[cfg(test)]
@@ -201,7 +288,7 @@ mod tests {
     fn test_passive_expiration() {
         let mut storage = MemoryStorage::new(1024);
         let now = SystemTime::now();
-        let ttl = now + Duration::from_secs(1);
+        let ttl = now + Duration::from_millis(1);
         
         // set value with 1 second ttl
         storage.set("key1".to_string(), 
@@ -212,7 +299,7 @@ mod tests {
         assert!(storage.exists("key1").unwrap());
         
         // wait for ttl to expire
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(5));
         
         // value should be gone after expiry
         assert!(storage.get("key1").is_err());
@@ -242,4 +329,113 @@ mod tests {
         assert!(stats.keys_expired > 0);
         assert!(stats.keys_checked > 0);
     }
+
+    #[test]
+        fn test_memory_limits() {
+            let mut storage = MemoryStorage::new(10);
+            
+            // should succeed - within limits
+            assert!(storage.set(
+                "key1".to_string(),
+                StorageValue::String("123".to_string()),
+                None
+            ).is_ok());
+
+            // should fail - exceeds memory limit
+            assert!(storage.set(
+                "key2".to_string(), 
+                StorageValue::String("very long string".to_string()),
+                None
+            ).is_err());
+        }
+
+        #[test]
+        fn test_update_memory_usage() {
+            let mut storage = MemoryStorage::new(100);
+            
+            storage.set(
+                "key1".to_string(),
+                StorageValue::String("short".to_string()),
+                None
+            ).unwrap();
+            let initial_memory = storage.used_memory;
+
+            storage.set(
+                "key1".to_string(),
+                StorageValue::String("longer string".to_string()),
+                None
+            ).unwrap();
+            
+            assert!(storage.used_memory > initial_memory);
+
+            storage.set(
+                "key1".to_string(),
+                StorageValue::String("tiny".to_string()),
+                None
+            ).unwrap();
+
+            assert!(storage.used_memory < initial_memory);
+        }
+
+        #[test]
+        fn test_delete_updates_memory() {
+            let mut storage = MemoryStorage::new(100);
+            
+            storage.set(
+                "key1".to_string(),
+                StorageValue::String("test value".to_string()),
+                None
+            ).unwrap();
+            
+            let pre_delete_memory = storage.used_memory;
+            storage.delete("key1").unwrap();
+            
+            assert_eq!(storage.used_memory, 0);
+            assert!(storage.used_memory < pre_delete_memory);
+        }
+
+        #[test]
+        fn test_expire_cleanup() {
+            let mut storage = MemoryStorage::new(100);
+            let now = SystemTime::now();
+            
+            // add expired entry
+            storage.set(
+                "expired".to_string(),
+                StorageValue::String("value".to_string()),
+                Some(now)
+            ).unwrap();
+
+            // add non-expired entry
+            storage.set(
+                "valid".to_string(),
+                StorageValue::String("value".to_string()),
+                Some(now + Duration::from_secs(30))
+            ).unwrap();
+
+            assert!(storage.get("expired").is_err());
+            assert!(storage.get("valid").is_ok());
+        }
+
+        #[test]
+        fn test_clear(){
+            let mut storage = MemoryStorage::new(100);
+            
+            storage.set(
+                "key1".to_string(),
+                StorageValue::String("value1".to_string()),
+                None
+            ).unwrap();
+            
+            storage.set(
+                "key2".to_string(),
+                StorageValue::String("value2".to_string()),
+                None
+            ).unwrap();
+            
+            storage.clear().unwrap();
+            
+            assert!(storage.get("key1").is_err());
+            assert!(storage.get("key2").is_err());
+        }
 }

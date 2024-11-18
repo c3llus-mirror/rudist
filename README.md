@@ -29,14 +29,14 @@ A Redis clone written in Rust for learning purposes. Implements core Redis funct
 #### Key Operations
 - [x] DEL
 - [x] EXISTS
-- [ ] EXPIRE
+- [x] EXPIRE
 - [x] TTL
 
 #### String Operations
 - [x] SET
 - [x] GET
-- [ ] INCR/DECR
-- [ ] APPEND
+- [x] INCR/DECR
+- [x] APPEND
 
 #### List Operations
 - [ ] LPUSH/RPUSH

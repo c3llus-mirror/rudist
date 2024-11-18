@@ -7,6 +7,7 @@ pub enum RedisError {
     // Storage errors
     KeyNotFound,
     WrongType,
+    NotInteger,
     OutOfMemory,
     
     // Protocol errors
@@ -30,9 +31,10 @@ impl fmt::Display for RedisError {
             RedisError::ParseError(msg) => write!(f, "ERR Protocol error: {}", msg),
             RedisError::InvalidCommand(cmd) => write!(f, "ERR unknown command '{}'", cmd),
             RedisError::InvalidArgumentCount { cmd, expected, got } => 
-            write!(f, "ERR wrong number of arguments for '{}' command: expected {}, got {}", cmd, expected, got),
+                write!(f, "ERR wrong number of arguments for '{}' command: expected {}, got {}", cmd, expected, got),
             RedisError::IOError(err) => write!(f, "ERR IO error: {}", err),
             RedisError::Internal(msg) => write!(f, "ERR internal error: {}", msg),
+            RedisError::NotInteger => write!(f, "ERR value is not an integer"),
         }
     }
 }
@@ -49,6 +51,12 @@ impl std::error::Error for RedisError {
 impl From<io::Error> for RedisError {
     fn from(err: io::Error) -> Self {
         RedisError::IOError(err)
+    }
+}
+
+impl From<std::num::ParseIntError> for RedisError {
+    fn from(_: std::num::ParseIntError) -> Self {
+        RedisError::NotInteger
     }
 }
 
